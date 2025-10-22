@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 4
+names: ['Poppy Seeds', 'sand', 'soil', 'staples']
+
+roboflow:
+  workspace: staplebot-computer-vision
+  project: staplebot_cv-po9vb
+  version: 3
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/staplebot-computer-vision/staplebot_cv-po9vb/dataset/3

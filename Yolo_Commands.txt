@@ -1,0 +1,75 @@
+You will probably need to create a virtual environment on your Linux laptop and the Pi to install ultralytics and maybe some other things!
+
+Once you have done this, on your laptop, run: 
+yolo detect train data=data.yaml model=yolo11n.pt epochs=100 imgsz=640
+
+Make sure that you have the data.yaml file in the same directory you are running this command in, and that the paths to the train, valid, and test folders are correct. Data.yaml is just an umbrella file which specifies locations of data and number and names of classes, you should get it after downloading the data from roboflow!
+
+You can tweak the number of epochs, but probably leave everything else the same. There are other parameters you can specify in this command if needed, you can find them pretty easily in the ultralytics documentation.
+
+This will give you a model called best.pt which contains the best weights for your model after training. Now, run:
+yolo export model=path/to/best.pt format=imx data=data.yaml
+
+Where path/to/best.pt is the path to this model.
+
+Once this is complete, it will create a folder called "yolo11n_imx_model". Using FileZilla or another file transfer software, transfer this folder to the Pi.
+
+In the virtual environment on the Pi, run:
+sudo apt install imx500-all
+sudo reboot
+pip install git+https://github.com/SonySemiconductorSolutions/aitrios-rpi-application-module-library.git
+
+Now create a python file and put this inference script in it:
+
+---------------------------------------------------
+
+import numpy as np
+from modlib.apps import Annotator
+from modlib.devices import AiCamera
+from modlib.models import COLOR_FORMAT, MODEL_TYPE, Model
+from modlib.models.post_processors import pp_od_yolo_ultralytics
+
+
+class YOLO(Model):
+    """YOLO model for IMX500 deployment."""
+
+    def __init__(self):
+        """Initialize the YOLO model for IMX500 deployment."""
+        super().__init__(
+            model_file="yolo11n_imx_model/packerOut.zip",  # replace with proper directory
+            model_type=MODEL_TYPE.CONVERTED,
+            color_format=COLOR_FORMAT.RGB,
+            preserve_aspect_ratio=False,
+        )
+
+        self.labels = np.genfromtxt(
+            "yolo11n_imx_model/labels.txt",  # replace with proper directory
+            dtype=str,
+            delimiter="\n",
+        )
+
+    def post_process(self, output_tensors):
+        """Post-process the output tensors for object detection."""
+        return pp_od_yolo_ultralytics(output_tensors)
+
+
+device = AiCamera(frame_rate=16)  # Optimal frame rate for maximum DPS of the YOLO model running on the AI Camera
+model = YOLO()
+device.deploy(model)
+
+annotator = Annotator()
+
+with device as stream:
+    for frame in stream:
+        detections = frame.detections[frame.detections.confidence > 0.55]
+        labels = [f"{model.labels[class_id]}: {score:0.2f}" for _, score, class_id, _ in detections]
+
+        annotator.annotate_boxes(frame, detections, labels=labels, alpha=0.3, corner_radius=10)
+        frame.display()
+
+--------------------------
+You might need to install the imports if you don't already have them!
+
+Then run this script after updating to the appropriate paths, and it should work!
+
+Here is the documentation for the export/inference process.
